@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment variables (keep .env.example tracked)
+.env
+.env.*
+*.env
+atlas-credentials.env
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/

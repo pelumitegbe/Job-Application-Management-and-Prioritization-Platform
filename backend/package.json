@@ -1,0 +1,28 @@
+{
+  "name": "job-application-platform-backend",
+  "version": "1.0.0",
+  "description": "REST API for the Job Application Management and Prioritization Platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "test:integration": "node --test \"test/integration/*.test.js\"",
+    "dev": "node --watch src/server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.12.1",
+    "morgan": "^1.12.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}

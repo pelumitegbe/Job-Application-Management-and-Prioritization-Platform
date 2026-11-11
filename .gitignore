@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Credentials and environment files
+.env
+.env.*
+*.env
+atlas-credentials.env
+!.env.example
+
+# Local archive containing credentials
+project-review.zip
+
+# Logs and generated files
+logs/
+*.log
+npm-debug.log*
+coverage/
+.DS_Store
