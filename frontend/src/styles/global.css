@@ -1,0 +1,213 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+/* --------------------------------------------------------------------------
+   Design tokens (shadcn/ui naming).
+   Brand: electric purple + royal blue. Accents: teal, coral, amber.
+   Canvas: neutral white and light gray; colour is reserved for components
+   (buttons, icons, badges, banners, illustrations).
+
+   Contrast (WCAG AA) checked for every text/background pair used:
+   - white on purple #7c3aed 5.7:1, on royal blue #2563eb 5.2:1
+   - foreground on #fafbfc 17:1, muted text #4b5563 7.2:1+, subtle #6b7280 4.6:1+
+     (subtle text is not used on #f3f4f6, where it would drop to 4.4:1)
+   - coral/amber are used as fills; their text shades are #c2410c / #92400e
+   - form-field borders #8c929c are 3.1:1 against white
+   -------------------------------------------------------------------------- */
+:root {
+  --background: #fafbfc; /* main application canvas */
+  --surface: #f8fafc; /* sidebar and inset panels */
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --foreground: #111827;
+
+  --muted: #f3f4f6;
+  --muted-foreground: #4b5563;
+  --subtle-foreground: #6b7280;
+
+  --border: #e5e7eb;
+  --input: #8c929c;
+
+  --primary: #7c3aed; /* electric purple */
+  --primary-hover: #6d28d9;
+  --primary-foreground: #ffffff;
+  --primary-soft: #ede9fe;
+  --primary-soft-foreground: #5b21b6;
+  --royal: #2563eb; /* royal blue */
+
+  --accent: #f3f4f6;
+  --accent-foreground: #111827;
+
+  --teal: #14b8a6;
+  --coral: #ff7a59;
+  --amber: #f59e0b;
+
+  --destructive: #dc2626;
+  --destructive-soft: #fef2f2;
+  --destructive-soft-foreground: #991b1b;
+  --success: #047857;
+  --success-soft: #ecfdf5;
+  --success-soft-foreground: #065f46;
+  --info-soft: #eff6ff;
+  --info-soft-foreground: #1e40af;
+
+  --ring: #8b5cf6;
+  --radius: 0.625rem;
+
+  --shadow-color: 220 25% 20%;
+
+  color-scheme: light;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-royal: var(--royal);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-teal: var(--teal);
+  --color-coral: var(--coral);
+  --color-amber: var(--amber);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-soft-foreground: var(--destructive-soft-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 14px);
+
+  /* Soft, neutral shadows */
+  --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.06);
+  --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.07), 0 1px 2px hsl(var(--shadow-color) / 0.04);
+  --shadow-md: 0 4px 12px -2px hsl(var(--shadow-color) / 0.08), 0 2px 4px -2px hsl(var(--shadow-color) / 0.05);
+  --shadow-lg: 0 16px 32px -12px hsl(var(--shadow-color) / 0.18), 0 4px 10px -4px hsl(var(--shadow-color) / 0.08);
+  --shadow-xl: 0 24px 48px -16px hsl(var(--shadow-color) / 0.28);
+
+  --animate-in: fade-in 160ms ease-out;
+  --animate-slide-in: slide-in 200ms ease-out;
+  --animate-slide-in-right: slide-in-right 220ms ease-out;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out infinite;
+}
+
+/* Brand gradients (restrained: purple -> indigo -> royal blue). */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, #7c3aed 0%, #5b47f0 55%, #2563eb 100%);
+}
+
+@utility bg-brand-gradient-hover {
+  background-image: linear-gradient(135deg, #6d28d9 0%, #4f3ae0 55%, #1d4ed8 100%);
+}
+
+@utility bg-brand-soft {
+  background-image: linear-gradient(135deg, #f3efff 0%, #eef2ff 60%, #eaf2ff 100%);
+}
+
+@utility text-brand-gradient {
+  background-image: linear-gradient(120deg, #7c3aed 0%, #2563eb 100%);
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: #ddd6fe; /* violet-200 (brand accent) */
+  }
+}
+
+/* Respect users who ask for less motion: stop floating cards, animations and transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
