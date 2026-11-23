@@ -52,6 +52,9 @@ export const testUser = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   createdAt: '2026-11-01T12:00:00.000Z',
+  // A saved preference, so the one-time time zone suggestion stays out of unrelated tests.
+  timezone: 'UTC',
+  timezoneSource: 'user',
 };
 
 export function inOneHour() {

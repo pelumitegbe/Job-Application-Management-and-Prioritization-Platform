@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
-import { Plus, RotateCw } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router';
+import { ListPlus, Plus, RotateCw } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
 import AppLayout from '../components/layout/AppLayout';
 import Button from '../components/common/Button';
 import Alert from '../components/common/Alert';
@@ -166,7 +167,13 @@ export default function Applications() {
             </div>
             <p className="mt-1.5 text-[14px] text-muted-foreground">Every job you're tracking, newest first.</p>
           </div>
-          {addButton}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link to="/applications/bulk" className={buttonVariants({ variant: 'outline', className: 'w-full sm:w-auto' })}>
+              <ListPlus aria-hidden="true" />
+              Add multiple
+            </Link>
+            {addButton}
+          </div>
         </section>
 
         {content}

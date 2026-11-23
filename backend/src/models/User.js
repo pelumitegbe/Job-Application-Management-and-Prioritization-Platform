@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { isValidTimeZone } = require('../utils/timezone');
 
 const userSchema = new mongoose.Schema(
   {
@@ -21,6 +22,17 @@ const userSchema = new mongoose.Schema(
       // Excluded from query results unless explicitly requested with
       // .select('+passwordHash') (only the login flow does this).
       select: false,
+    },
+    // IANA time zone used to decide "today" for priority scoring. No default is
+    // stored: a missing value means the user hasn't chosen one yet, and the
+    // effective time zone is UTC (see utils/timezone.js effectiveTimeZone).
+    timezone: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: (value) => value === undefined || value === null || isValidTimeZone(value),
+        message: 'timezone must be a valid IANA time zone identifier.',
+      },
     },
   },
   { timestamps: true }

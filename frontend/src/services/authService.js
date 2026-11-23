@@ -1,7 +1,8 @@
 // Authentication API calls. Response shapes follow the backend contract:
 //   POST /api/auth/register -> 201 { user }
 //   POST /api/auth/login    -> 200 { token, tokenType, expiresIn, expiresAt, user }
-//   GET  /api/auth/me       -> 200 { user }
+//   GET  /api/auth/me       -> 200 { user }   (user.timezone, user.timezoneSource: 'user' | 'default')
+//   PATCH /api/auth/me      -> 200 { user }   (body: { timezone }, an IANA name)
 
 import { apiRequest } from './api';
 
@@ -25,5 +26,11 @@ export async function login({ email, password }) {
 
 export async function getCurrentUser({ signal } = {}) {
   const { user } = await apiRequest('/api/auth/me', { signal });
+  return user;
+}
+
+/** Saves the signed-in user's time zone (an IANA name such as "America/Chicago"). */
+export async function updateTimeZone(timezone) {
+  const { user } = await apiRequest('/api/auth/me', { method: 'PATCH', body: { timezone } });
   return user;
 }

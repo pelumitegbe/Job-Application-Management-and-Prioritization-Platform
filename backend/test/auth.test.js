@@ -118,7 +118,7 @@ test('register: valid data returns 201 with the public user and stores a bcrypt 
   const res = await register({ ...validUser, email: '  Test@Example.COM ' });
 
   assert.equal(res.status, 201);
-  assert.deepEqual(Object.keys(res.body.user).sort(), ['createdAt', 'email', 'id', 'name']);
+  assert.deepEqual(Object.keys(res.body.user).sort(), ['createdAt', 'email', 'id', 'name', 'timezone', 'timezoneSource']);
   assert.equal(res.body.user.name, 'Test User');
   assert.equal(res.body.user.email, 'test@example.com', 'email is normalized');
 
@@ -285,14 +285,14 @@ test('me: expired token returns 401', async () => {
   assert.ok(!/jwt expired/i.test(JSON.stringify(res.body)), 'library error is not exposed');
 });
 
-test('me: valid token returns 200 with id, name, email and createdAt only', async () => {
+test('me: valid token returns 200 with id, name, email, createdAt and time zone only', async () => {
   const { body: { user } } = await register();
   const { body: { token } } = await login({ email: validUser.email, password: validUser.password });
 
   const res = await me(token);
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, { user });
-  assert.deepEqual(Object.keys(res.body.user).sort(), ['createdAt', 'email', 'id', 'name']);
+  assert.deepEqual(Object.keys(res.body.user).sort(), ['createdAt', 'email', 'id', 'name', 'timezone', 'timezoneSource']);
 });
 
 test('me: valid token for a deleted user returns 401', async () => {

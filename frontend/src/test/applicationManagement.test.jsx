@@ -47,6 +47,9 @@ function createBackend(initial = []) {
         pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
       });
     },
+    // The dashboard's Top priorities card; these tests don't cover it (see priorities.test.jsx).
+    'GET /api/applications/priorities': () =>
+      jsonResponse(200, { applications: [], pagination: { page: 1, limit: 3, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }),
     'GET /api/applications/:id': ({ params }) => {
       calls.push(`get ${params.id}`);
       const application = find(params.id);

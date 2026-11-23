@@ -8,6 +8,9 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Applications from './pages/Applications';
+import BulkAddApplications from './pages/BulkAddApplications';
+import Priorities from './pages/Priorities';
+import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 
 function RootRedirect() {
@@ -28,6 +31,9 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/applications" element={<Applications />} />
+          <Route path="/applications/bulk" element={<BulkAddApplications />} />
+          <Route path="/priorities" element={<Priorities />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -114,6 +114,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => endSession('loggedOut'), [endSession]);
+
+  // Saves the time zone preference; views that depend on it (priorities) react to user.timezone.
+  const updateTimeZone = useCallback(async (timezone) => {
+    const updated = await authService.updateTimeZone(timezone);
+    setUser(updated);
+    return updated;
+  }, []);
   const clearNotice = useCallback(() => setNotice(null), []);
 
   const value = useMemo(
@@ -127,8 +134,9 @@ export function AuthProvider({ children }) {
       login,
       logout,
       clearNotice,
+      updateTimeZone,
     }),
-    [user, status, expiresAt, notice, login, logout, clearNotice]
+    [user, status, expiresAt, notice, login, logout, clearNotice, updateTimeZone]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

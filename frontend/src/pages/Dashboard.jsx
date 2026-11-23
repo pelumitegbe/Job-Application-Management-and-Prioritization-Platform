@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowDownWideNarrow, ArrowRight, BellRing, CalendarClock, Plus, UserRound } from 'lucide-react';
+import { ArrowRight, BellRing, CalendarClock, Plus, UserRound } from 'lucide-react';
 import AppLayout from '../components/layout/AppLayout';
 import ApplicationFormDialog from '../components/applications/ApplicationFormDialog';
 import { useToast } from '../context/ToastContext';
@@ -9,21 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import IconTile from '../components/common/IconTile';
 import EmptyState from '../components/common/EmptyState';
 import TrackingBoardIllustration from '../components/illustrations/TrackingBoardIllustration';
-import { TONES } from '@/lib/tones';
-import { cn } from '@/lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { useApplicationStats } from '../hooks/useApplicationStats';
 import StatsOverview from '../components/dashboard/StatsOverview';
 import RecentApplications from '../components/dashboard/RecentApplications';
-
-// The agreed prioritization formula (P = 0.40D + 0.25F + 0.20S + 0.15I).
-// These are the algorithm's design weights, not user data.
-const PRIORITY_FACTORS = [
-  { label: 'Deadline urgency', weight: 40, tone: 'violet' },
-  { label: 'Follow-up urgency', weight: 25, tone: 'blue' },
-  { label: 'Application stage', weight: 20, tone: 'teal' },
-  { label: 'Your interest level', weight: 15, tone: 'amber' },
-];
+import TopPriorities from '../components/dashboard/TopPriorities';
+import { useTopPriorities } from '../hooks/usePriorities';
 
 function formatDate(value) {
   const date = new Date(value);
@@ -56,6 +47,7 @@ export default function Dashboard() {
   const { showToast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const stats = useApplicationStats();
+  const top = useTopPriorities(3);
   const firstName = user?.name?.split(/\s+/)[0] || 'there';
 
   function handleCreated(application) {
@@ -65,6 +57,7 @@ export default function Dashboard() {
       action: { label: 'View applications', to: '/applications' },
     });
     stats.reload(); // statistics include the new application
+    // Top priorities refresh themselves on application changes (services/applicationEvents.js).
   }
 
   return (
@@ -116,32 +109,8 @@ export default function Dashboard() {
         <RecentApplications recent={stats.recent} total={stats.total} isLoading={stats.isLoading} error={stats.error} onAdd={() => setFormOpen(true)} />
 
         <div className="grid items-start gap-6 lg:grid-cols-5">
-          {/* Future priority ranking */}
-          <Card as="section" aria-labelledby="ranking-heading" className="lg:col-span-3">
-            <CardHeading id="ranking-heading" icon={ArrowDownWideNarrow} tone="coral" title="Priority ranking">
-              <CardDescription className="mt-2">
-                Applications will be ranked by a weighted score, so you can see where to focus first. This is how each factor will count:
-              </CardDescription>
-            </CardHeading>
-            <CardContent className="pt-5">
-              <ul className="flex flex-col gap-4">
-                {PRIORITY_FACTORS.map(({ label, weight, tone }) => (
-                  <li key={label}>
-                    <div className="mb-2 flex items-center justify-between text-[13px]">
-                      <span className="flex items-center gap-2 font-medium text-foreground">
-                        <span className={cn('size-2 rounded-full', TONES[tone].solid)} aria-hidden="true" />
-                        {label}
-                      </span>
-                      <span className={cn('font-semibold tabular-nums', TONES[tone].text)}>{weight}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                      <div className={cn('h-full rounded-full', TONES[tone].solid)} style={{ width: `${weight}%` }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {/* Top 3 actionable applications from GET /api/applications/priorities?limit=3 */}
+          <TopPriorities data={top.data} error={top.error} isLoading={top.isLoading} onRetry={top.reload} />
 
           {/* Future deadlines and follow-ups */}
           <div className="flex flex-col gap-6 lg:col-span-2">

@@ -166,10 +166,11 @@ describe('logout and expiry', () => {
   });
 
   test('the dashboard shows the user; upcoming features stay marked as coming soon', async () => {
+    const emptyPage = (limit) => ({ applications: [], pagination: { page: 1, limit, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } });
     mockFetch({
       'GET /api/auth/me': () => jsonResponse(200, { user: testUser }),
-      'GET /api/applications': () =>
-        jsonResponse(200, { applications: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false } }),
+      'GET /api/applications': () => jsonResponse(200, emptyPage(100)),
+      'GET /api/applications/priorities': () => jsonResponse(200, emptyPage(3)),
     });
     storeSession();
     renderApp('/dashboard');
@@ -180,16 +181,20 @@ describe('logout and expiry', () => {
     expect(within(header).getByRole('button', { name: 'Log out' })).toBeInTheDocument();
 
     // Not-yet-built features are still labelled as coming soon.
-    for (const name of ['Priority ranking', 'Upcoming deadlines', 'Follow-up reminders']) {
+    for (const name of ['Upcoming deadlines', 'Follow-up reminders']) {
       expect(within(screen.getByRole('region', { name })).getByText('Coming soon')).toBeInTheDocument();
     }
     // Statistics are real (here: an account with no applications), not placeholders.
     const overview = screen.getByRole('region', { name: 'Overview' });
     await waitFor(() => expect(within(overview).getByTestId('stat-total')).toHaveTextContent('Total applications0'));
     expect(within(overview).queryByText('Coming soon')).not.toBeInTheDocument();
+    // Priority ranking is built now: the Top priorities card is live.
+    const top = screen.getByRole('region', { name: 'Top priorities' });
+    expect(within(top).queryByText('Coming soon')).not.toBeInTheDocument();
+    expect(await within(top).findByText('Nothing to prioritise yet')).toBeInTheDocument();
   });
 
-  test('sidebar: Dashboard and Applications are links; upcoming sections are disabled, not links', async () => {
+  test('sidebar: Dashboard, Applications, Priorities and Settings are links; Follow-ups is disabled, not a link', async () => {
     mockFetch({ 'GET /api/auth/me': () => jsonResponse(200, { user: testUser }) });
     storeSession();
     renderApp('/dashboard');
@@ -197,8 +202,10 @@ describe('logout and expiry', () => {
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'Applications' })).toHaveAttribute('href', '/applications');
-    expect(within(nav).getAllByRole('link')).toHaveLength(2);
-    for (const label of ['Priorities', 'Follow-ups']) {
+    expect(within(nav).getByRole('link', { name: 'Priorities' })).toHaveAttribute('href', '/priorities');
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    expect(within(nav).getAllByRole('link')).toHaveLength(4);
+    for (const label of ['Follow-ups']) {
       const item = within(nav).getByText(label).closest('[aria-disabled]');
       expect(item).toHaveAttribute('aria-disabled', 'true');
       expect(item).toHaveTextContent(/Soon: not available yet/);

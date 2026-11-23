@@ -1,4 +1,4 @@
-const { validateRegistration, validateLogin } = require('../validators/authValidators');
+const { validateRegistration, validateLogin, validateProfileUpdate } = require('../validators/authValidators');
 const authService = require('../services/authService');
 const { createHttpError, createValidationError } = require('../utils/httpError');
 
@@ -29,4 +29,14 @@ async function me(req, res) {
   res.status(200).json({ user });
 }
 
-module.exports = { register, login, me };
+/** PATCH /api/auth/me: updates the signed-in user's own preferences (currently only timezone). */
+async function updateMe(req, res) {
+  const validation = validateProfileUpdate(req.body);
+  if (validation.errors.length) throw createValidationError(validation);
+
+  const user = await authService.updateUserTimeZone(req.auth.userId, validation.value.timezone);
+  if (!user) throw createHttpError(401, 'User account no longer exists.');
+  res.status(200).json({ user });
+}
+
+module.exports = { register, login, me, updateMe };

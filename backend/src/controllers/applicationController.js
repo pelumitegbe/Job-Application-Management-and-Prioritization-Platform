@@ -3,9 +3,11 @@ const {
   validateUpdateApplication,
   validateObjectId,
   validatePagination,
+  validatePriorityQuery,
 } = require('../validators/applicationValidators');
 const applicationService = require('../services/applicationService');
-const { createValidationError } = require('../utils/httpError');
+const authService = require('../services/authService');
+const { createHttpError, createValidationError } = require('../utils/httpError');
 
 // All handlers run after the `authenticate` middleware, so req.auth.userId is
 // the verified owner. The owner is never read from the body, query or params.
@@ -24,6 +26,16 @@ async function create(req, res) {
 async function list(req, res) {
   const pagination = validated(validatePagination(req.query));
   const result = await applicationService.listApplications(req.auth.userId, pagination);
+  res.status(200).json(result);
+}
+
+// Ranked by priority score, recalculated as of "now" on every request, using
+// the calendar date in the signed-in user's own time zone (UTC by default).
+async function priorities(req, res) {
+  const query = validated(validatePriorityQuery(req.query));
+  const timezone = await authService.getUserTimeZone(req.auth.userId);
+  if (!timezone) throw createHttpError(401, 'User account no longer exists.');
+  const result = await applicationService.getPrioritizedApplications(req.auth.userId, query, { now: new Date(), timezone });
   res.status(200).json(result);
 }
 
@@ -46,4 +58,4 @@ async function remove(req, res) {
   res.status(204).end();
 }
 
-module.exports = { create, list, getOne, update, remove };
+module.exports = { create, list, priorities, getOne, update, remove };

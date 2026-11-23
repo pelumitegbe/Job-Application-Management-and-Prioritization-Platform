@@ -3,15 +3,21 @@
 A web application that helps job seekers track job applications, move them through
 stages, rank them with a weighted priority algorithm, and stay on top of deadlines.
 
-**Current status: Milestone 4B.2 – complete application management.** The frontend can
-list (paginated), view, add, edit and delete the user's applications. The dashboard
-shows real statistics, on top of the colourful UI and authentication from Milestone 4A.
-- **Backend:** a health check, JWT authentication, and an owner-scoped CRUD API for job
-  applications.
+**Current status: Milestone 5C – time-zone-aware scoring and automatic refresh.** The
+backend ranks each user's applications with an explainable weighted score
+(`GET /api/applications/priorities`; see [Priority scoring](#priority-scoring)), and
+the frontend shows that ranking on a [Priorities page](#priorities-page-priorities)
+and in the dashboard's **Top priorities** card. "Today" now follows each user's
+chosen time zone, and priorities refresh themselves at local midnight (see
+[Time zones and automatic refresh](#time-zones-and-automatic-refresh)). The frontend can also list
+(paginated), view, add (one or many), edit and delete applications and shows real
+dashboard statistics.
+- **Backend:** a health check, JWT authentication, an owner-scoped CRUD API for job
+  applications, and the priority-scoring endpoint.
 - **Frontend (React + Vite):** registration, login, session handling, protected
   routing, and a dashboard shell.
 
-The application management UI, prioritization and reminders come in later milestones.
+Follow-up reminders and notifications come in a later milestone.
 
 **Quick start:** see [Running the app locally](#running-the-app-locally).
 
@@ -38,11 +44,12 @@ job-application-platform/
 │   │   ├── middleware/         # authenticate (JWT), requestLogger (Morgan), 404 and error handling
 │   │   ├── models/             # Mongoose models (User, JobApplication)
 │   │   ├── routes/             # Express routers (/api/health, /api/auth, /api/applications)
-│   │   ├── services/           # Business logic and database access (auth, token, application)
-│   │   ├── utils/              # createHttpError helper, log redaction helpers
+│   │   ├── services/           # Business logic and database access (auth, token, application, priorityScoring)
+│   │   ├── utils/              # createHttpError helper, log redaction helpers, timezone.js (IANA validation, local calendar date)
 │   │   ├── validators/         # Request validation (auth, applications)
 │   │   ├── app.js              # Express app configuration (no network I/O)
 │   │   └── server.js           # Startup: load config, connect DB, start HTTP server
+│   ├── scripts/demoData.js     # Development demo data: inspect / seed / verify / remove
 │   ├── test/                   # Node built-in tests (no database required)
 │   │   └── integration/        # Optional tests against a real test database
 │   ├── .env.example
@@ -52,7 +59,7 @@ job-application-platform/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── illustrations/  # Original SVG illustrations (tracking board, empty-state scenes)
-│   │   │   ├── applications/   # StatusBadge, InterestLevel, ApplicationList, Pagination, ApplicationFormDialog (add/edit), ApplicationDetailsSheet, DeleteApplicationDialog
+│   │   │   ├── applications/   # StatusBadge, InterestLevel, ApplicationList, Pagination, ApplicationFormDialog (add/edit), ApplicationDetailsSheet, DeleteApplicationDialog, BulkApplicationRow
 │   │   │   ├── dashboard/      # StatsOverview, RecentApplications
 │   │   │   ├── ui/             # shadcn/ui-style primitives: button, input, textarea, native-select, label, card, badge, alert, dialog, sheet, separator
 │   │   │   ├── common/         # App components built on ui/: Button (loading), FormField, TextField, PasswordField, Alert, EmptyState, IconTile, Spinner, Logo
@@ -62,8 +69,8 @@ job-application-platform/
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx # Current user, session status, login/logout, expiry timer
 │   │   │   └── ToastContext.jsx # Success/error toast notifications
-│   │   ├── hooks/              # useAuth, useFormSubmission, useApplications, useApplicationStats
-│   │   ├── pages/              # Login, Register, Dashboard, Applications, NotFound
+│   │   ├── hooks/              # useAuth, useFormSubmission, useApplications, useApplicationStats, usePriorities, usePriorityAutoRefresh
+│   │   ├── pages/              # Login, Register, Dashboard, Applications, BulkAddApplications, Priorities, Settings, NotFound
 │   │   ├── services/
 │   │   │   ├── api.js          # Central fetch client (base URL, JSON, Bearer token, errors)
 │   │   │   ├── authService.js  # register / login / me API calls
@@ -71,7 +78,7 @@ job-application-platform/
 │   │   │   └── tokenStorage.js # sessionStorage for the JWT and its expiry
 │   │   ├── lib/                # utils.js (cn helper), tones.js (accent colours), useReturnFocus.js (dialog focus return)
 │   │   ├── styles/global.css   # Tailwind import, design tokens, base styles
-│   │   ├── utils/              # validation.js (auth forms), applicationForm.js (add/edit form), applicationStats.js, formatters.js
+│   │   ├── utils/              # validation.js (auth forms), applicationForm.js (add/edit form), bulkApplications.js, applicationStats.js, priorityInsights.js, timezone.js, formatters.js
 │   │   ├── test/               # Vitest + React Testing Library tests
 │   │   ├── config.js           # App name, VITE_API_BASE_URL lookup
 │   │   ├── App.jsx             # Routes
@@ -197,14 +204,14 @@ defined once in `src/lib/tones.js`:
       and **View applications** actions;
     - four colour-coded statistic cards with real values;
     - "Recent applications" (or an empty state);
-    - the priority-formula card;
+    - the **Top priorities** card (see [Dashboard: Top priorities](#dashboard-top-priorities));
     - deadline and follow-up empty states;
     - the account card.
-- **Sidebar links:** **Dashboard** and **Applications** are links. Priorities and
-  Follow-ups are non-interactive items (`aria-disabled`, an amber "Soon" badge).
-- **Dashboard placeholders:**
-  - priority ranking, deadlines and follow-ups are still labelled **Coming soon**;
-  - the ranking card shows only the formula's agreed weights (40/25/20/15%).
+- **Sidebar links:** **Dashboard**, **Applications** and **Priorities** (a
+  sorted-list icon) are links. Follow-ups is a non-interactive item (`aria-disabled`,
+  an amber "Soon" badge).
+- **Dashboard placeholders:** the upcoming-deadline and follow-up reminder cards are
+  still labelled **Coming soon**.
 
 **Accessibility:**
 - **Focus:** every control has a visible 3px focus ring, and there's a "Skip to
@@ -259,6 +266,9 @@ URL before building for deployment.
 | `/register`  | Logged-out users | Same as `/login` |
 | `/dashboard` | Logged-in users | Logged-out users are redirected to `/login`; after logging in they return here |
 | `/applications` | Logged-in users | The user's job applications; `?page=N` selects the page |
+| `/applications/bulk` | Logged-in users | Add several applications at once |
+| `/priorities` | Logged-in users | Ranked applications; `?category=`, `?status=`, `?rejected=1` and `?page=N` keep the filters and page |
+| `/settings` | Logged-in users | Time zone preference |
 | anything else | Everyone      | "Page not found" |
 
 While a stored session is being checked, protected and guest routes show
@@ -353,6 +363,56 @@ banner.
   - From the dashboard, the toast also offers a **View applications** link.
 - **Network failures** keep the form open with the values intact. **401** ends the
   session.
+
+### Adding multiple applications
+
+**Add multiple**, next to **Add application** on the Applications page, opens a dedicated
+page, `/applications/bulk`. A page was chosen over a dialog because it handles 10–20
+entries better on phones, has its own URL, and returning to the list refreshes it.
+
+**Entry:**
+- It starts with **three empty, numbered cards** ("Application 1", 2, 3…).
+  - **Add another** adds a card, up to **20**, and focuses its Company field.
+  - The trash icon removes a card. The rest renumber, and at least one card always
+    remains.
+  - **Remove empty rows** clears any cards you haven't typed in.
+- **Each card has every create field,** with the backend's names and rules:
+  - Company \* and Position \* (required);
+  - Status (default Saved) and Interest level (1–5, default 3), as selects;
+  - Location, Job posting URL and Notes;
+  - Application date, Deadline and Follow-up date, as date pickers.
+- **Layout:** one column on phones, two on tablets, four on desktop. The Create/Cancel
+  bar stays pinned to the bottom. White cards on the neutral background, with the
+  brand gradient on the primary button.
+
+**Validation:**
+- Every unsent card is checked with **the same rules as the single form**
+  (`validateApplicationForm`): required fields, lengths, URL format and real
+  calendar dates.
+- **Errors** appear beside the affected field in the affected card, and focus moves
+  to the first one.
+- **If any card is invalid, nothing is sent.** Empty cards count as invalid; they're
+  never silently skipped. Remove them or fill them in.
+
+**Submission and retry:**
+- **One request at a time:** each card goes to the existing
+  `POST /api/applications`, sequentially, never in parallel. No new backend endpoint
+  was added.
+- **Progress** is announced ("Creating 2 of 5 applications…"), and the cards and
+  buttons are locked while it runs, so nothing can be submitted twice.
+- **Created cards** turn green, collapse to a "Created" summary, and are **never sent
+  again**.
+- **Failed cards** (backend validation errors or a network failure) are marked "Not
+  created". They keep their values, show backend field errors beside the fields and
+  any other message on the card, and the batch carries on with the remaining cards.
+- **The summary** reads either "All N applications created" or "X created, Y not
+  created". The button becomes **Retry N applications**, which sends only the cards
+  that haven't been created.
+- **A 401** stops the batch immediately: unsent cards aren't sent, and the session ends
+  as everywhere else.
+- **On success,** a toast offers **View applications**. When everything is created,
+  the page offers **View applications** or **Start a new batch**. The Applications page
+  refetches when you return, so the new entries appear.
 
 ### Viewing application details
 
@@ -454,6 +514,234 @@ the dashboard.
 - **The proper fix** is a backend aggregate endpoint, e.g. `GET /api/applications/stats`
   using a MongoDB `$group` on `{ user, status }`. That was deliberately not added in
   this milestone, which made no backend changes.
+
+### Priorities page (`/priorities`)
+
+The page shows the ranking from `GET /api/applications/priorities`. **The frontend
+never recalculates a score:** every number, category, factor and explanation comes from
+the API's `priority` object. The frontend only chooses labels, colours and which
+explanation to show first (`src/utils/priorityInsights.js`).
+
+**Loading the ranking.** The summary cards and filters need the whole ranking. If they
+worked on one page only, the totals would be wrong. The backend has no category or
+status filters, so the page:
+- reads the complete ranking with `includeRejected=true`, 100 per request (the
+  backend maximum);
+- reads the pages one after another, never in parallel;
+- stops after 10 pages (**up to 1,000 applications**; `fetchAllPriorities` in
+  `src/services/applicationService.js`).
+
+If an account has more than that, a note says that counts and filters cover the top
+1,000 only. Items keep the backend's order, and each item's **rank** is its position
+in the full ranking. Ranks therefore stay correct when filters or paging hide other
+items. For example, filtering to "Low" can show ranks #20–#23.
+
+**Summary cards** count over the whole ranking, never just the visible page:
+
+| Card | Counts |
+| ---- | ------ |
+| Actionable | Applications that are not rejected |
+| High priority | Category High or Critical |
+| Overdue follow-ups | `factors.followUp.overdue` is true (not rejected) |
+| Upcoming deadlines | Status Saved, the deadline applies and hasn't passed, and it is 0–7 calendar days away |
+
+The cards don't change when you filter; they describe the whole account.
+
+**Ranked list.** Each card shows:
+- the rank, position and company;
+- the status badge and the interest level (five pips);
+- the next action date;
+- the score as **"84/100" plus a bar**. The number is always printed, so the score
+  reads the same without colour. Screen readers hear "Priority score 84 out of 100";
+- the category badge;
+- warning badges;
+- the **most relevant explanation**. For a rejected application, this is the rejection
+  message. Otherwise it is the time-based factor (deadline or follow-up) with the
+  largest weighted contribution. If neither applies, it is an expired Saved deadline,
+  and failing that, the stage.
+
+A coloured left edge repeats the category. On phones the score bar moves below the
+details; from 768px it gets its own column.
+
+**Categories** are always shown by name. Colour only reinforces them:
+
+| Category | Score | Colour |
+| -------- | ----- | ------ |
+| Critical | 75–100 | Red |
+| High | 50–74 | Orange |
+| Medium | 25–49 | Blue |
+| Low | 1–24 | Gray |
+| No action | 0 | Muted gray |
+
+**Warnings** come from the backend's factor details, separately from the category.
+For example, an overdue follow-up is still flagged in red on a Medium item. There are
+five warnings:
+- **Follow-up overdue by N days** (red);
+- **Follow-up due today** (amber);
+- **Deadline today** (red);
+- **Deadline in N days** (amber, up to 7 days);
+- **Deadline passed** (gray, for an expired Saved deadline).
+
+Rejected applications show no warnings.
+
+**Explainable breakdown.** Selecting a card (it is one large button) opens a side
+sheet with:
+- the overall score and category, and the next action date;
+- the formula `P = 0.40D + 0.25F + 0.20S + 0.15I`;
+- a table with each factor's **score out of 100**, **weight** and **weighted
+  contribution in points**, plus the total (`rawScore`);
+- every explanation the backend returned, and the reference date it used;
+- for rejected applications, the override ("Rejected applications always score 0"),
+  with the total labelled "before override";
+- **Open application details**, which opens the existing details sheet. From there,
+  Edit and Delete reuse the existing dialogs, and the ranking reloads after any change.
+
+**Filters** (all applied to the full ranking, ordered by priority):
+- **Category:** All, Critical, High, Medium, Low or No action.
+- **Status:** All or any status. "Rejected" is only offered when rejected
+  applications are included.
+- **Include rejected:** off by default. Rejected applications always rank last at
+  score 0. Unticking it also clears a "Rejected" status filter.
+- **Reset filters** appears when any filter is set.
+
+Filters and the page number are kept in the URL, so they survive reloads and Back.
+
+**Pagination** reuses the Applications page's `Pagination` component, 10 per page. It
+shows "Showing 11–20 of 23" and "Page 2 of 3" for the *filtered* list. A page past the
+end jumps to the last page.
+
+**States:**
+- a loading skeleton;
+- "No applications to prioritise" for an empty account;
+- "No applications match these filters";
+- error messages with **Try again** (network, 5xx, unexpected response shape).
+
+A **401** ends the session through the shared API client and returns to login, as on
+every other page.
+
+### Dashboard: Top priorities
+
+The dashboard's ranking card is now live. It makes one request,
+`GET /api/applications/priorities?limit=3`, without `includeRejected`, so it shows the
+top three **actionable** applications. For each one it shows:
+- the rank, position and company;
+- the score (number and bar) and the category;
+- any warnings, and the most relevant explanation.
+
+Other details:
+- **View all priorities** links to `/priorities`.
+- It has its own loading skeleton, empty state, and error with **Try again**.
+- Adding an application from the dashboard refreshes it.
+- The statistics, recent applications, deadline and follow-up cards, and account card
+  are unchanged.
+
+### Priorities UI limitations
+
+- **The 1,000-application cap.** Accounts with more applications get counts and filters
+  over the top 1,000 only, and a note says so. Server-side filtering would need new
+  query parameters on the priorities endpoint.
+- **Scores refresh at local midnight, on tab return and on reconnect** (Milestone 5C;
+  see [Time zones and automatic refresh](#time-zones-and-automatic-refresh)). The page
+  header and the breakdown show the date and time zone the scores were computed for.
+- **No reminders or notifications.** Warnings are visible only on these pages; reminders
+  are a later milestone.
+
+### Time zones and automatic refresh
+
+Deadline and follow-up urgency depend on what "today" is. Since Milestone 5C, today is
+the **calendar date in the user's chosen time zone**, not the UTC date.
+
+**The time zone preference.**
+- Each user has an optional `timezone`: an IANA name such as `America/Chicago`.
+- Accounts that never chose one, including every account created before 5C, use
+  **UTC**. Nothing is written to existing records. `GET /api/auth/me` returns the
+  effective `timezone` and `timezoneSource`: `"default"` until the user saves a
+  choice, then `"user"`.
+- **Settings** (`/settings`, in the sidebar) shows:
+  - the saved time zone and the current time there;
+  - the browser's time zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`);
+  - a selector with every time zone the browser knows, grouped by region.
+
+  **Use detected time zone** only fills in the selector. Nothing is saved until you
+  press **Save** (`PATCH /api/auth/me`).
+- **One-time suggestion.** When the account is still on the UTC default and the browser
+  reports another zone, a banner at the top of each page asks "Use your time zone for
+  priorities?". It has two buttons:
+  - **Use America/Chicago** saves the browser zone.
+  - **Keep UTC** saves UTC as a deliberate choice.
+
+  Either choice is stored, so the banner doesn't return. A saved preference is never
+  overwritten automatically.
+
+**How the reference date is determined.**
+1. The priorities endpoint loads the signed-in user's time zone, which is UTC if none
+   is saved.
+2. It takes the current instant and finds its calendar date in that zone with
+   `Intl.DateTimeFormat`. For example, 03:00 UTC on Nov 30 is still Nov 29 in Chicago.
+3. That date is passed to the unchanged, pure scoring engine as midnight UTC of the
+   date (`referenceDate`).
+
+The formula, weights, ranges, categories, explanations and the rejected rule are
+exactly as before. The response's `scoring` object now also contains `timezone`:
+
+```json
+"scoring": { "formula": "P = 0.40D + 0.25F + 0.20S + 0.15I", "referenceDate": "2026-11-29", "timezone": "America/Chicago", "includeRejected": false }
+```
+
+**How date-only fields are interpreted.**
+- `deadline`, `followUpDate` and `applicationDate` are **calendar dates**, not instants.
+- A date entered as `2026-11-30` is stored as `2026-11-30T00:00:00.000Z`, as before.
+- These dates are never converted to a time zone. The backend compares them by their
+  UTC date, and the frontend formats them in UTC. **Nov 30 is Nov 30 for every user,
+  in every browser**, and never shows as Nov 29 in Chicago, New York or Los Angeles.
+- The edit form's date inputs use the same UTC date.
+- Real timestamps (`createdAt`, `updatedAt`) are still shown in the browser's local
+  time.
+
+**When priority scores refresh automatically.** Both the Priorities page and the
+dashboard's Top priorities refresh:
+- **at local midnight** in the time zone the scores were computed for, plus 2 seconds
+  so the server has certainly passed midnight. The next refresh is scheduled after
+  every load;
+- **when you return to the tab**, but only if the local date has changed since the
+  scores were computed;
+- **when the browser reconnects**, if the date has changed or the last load failed;
+- **after creating, editing or deleting an application**, including each application
+  in a bulk batch. The application service announces each change
+  (`services/applicationEvents.js`), and the priority views reload. There is no
+  global store;
+- **after you change your time zone.** The views reload, and midnight is
+  rescheduled for the new zone.
+
+Request safety:
+- At most one request runs at a time. A newer load aborts the older one, and only
+  the newest response may update the page.
+- Several triggers in the same moment are merged into one request.
+- Timers and listeners are removed when the page unmounts.
+- There is no polling. Outside these events, nothing is requested.
+
+**Daylight saving.**
+- The backend never adds 24 hours. It asks for the calendar date of an instant in the
+  zone, so 23- and 25-hour days are handled.
+- The frontend finds the next local midnight by binary search on the real local date,
+  not by adding 24 hours. In Chicago, the next refresh after midnight on Mar 8 2026 is
+  23 hours later, and after midnight on Nov 1 2026 it is 25 hours later.
+- In zones where clocks jump at midnight (e.g. `America/Santiago`), the refresh happens
+  at the first instant of the new day.
+
+**Limitations.**
+- The browser schedules the midnight refresh with its own clock. If that clock is wrong,
+  the refresh comes early or late. Tab return and reconnect still catch up.
+- A sleeping computer or a throttled background tab can delay the timer. The
+  visibility check refreshes as soon as you return.
+- Time zone names come from the runtime's time zone database (ICU). A zone the
+  browser lists but the server's Node.js doesn't know is rejected with a 400.
+  Deprecated aliases such as `US/Pacific` are accepted and stored under their current
+  name.
+- Dates sent as full ISO date-times with an offset (not by this UI) are stored as
+  instants. Their calendar day is then their UTC date, as before.
+- Dates are shown in a fixed short format. Timestamps use the browser's zone rather
+  than the saved one.
 
 ### How authentication works
 
@@ -815,15 +1103,40 @@ Response `200 OK`:
     "id": "6650f1c2a1b2c3d4e5f60718",
     "name": "Test User",
     "email": "test@example.com",
-    "createdAt": "2026-11-11T18:00:00.000Z"
+    "createdAt": "2026-11-11T18:00:00.000Z",
+    "timezone": "UTC",
+    "timezoneSource": "default"
   }
 }
 ```
+
+`timezone` is the effective IANA time zone used for priority scoring, which is `UTC`
+until the user chooses one. `timezoneSource` is `"default"` or `"user"`. The same two
+fields appear in the login and register responses.
 
 Errors (all `401`):
 - `Authentication required.` when there's no token or the header isn't a Bearer header.
 - `Invalid or expired token.` when the token is malformed, wrongly signed, uses the wrong algorithm, or has expired.
 - `User account no longer exists.` when the token is valid but the user has been deleted.
+
+### `PATCH /api/auth/me`
+
+Updates the signed-in user's **own** preferences. Only `timezone` can be changed here.
+The user is always the token's user; there is no id in the URL or body.
+
+```json
+{ "timezone": "America/Chicago" }
+```
+
+- `timezone` must be an IANA identifier the server's runtime knows, such as
+  `America/Chicago`, `Asia/Kolkata` or `UTC`.
+  - Letter case is corrected, and `Etc/UTC` becomes `UTC`.
+  - Offsets like `+05:00`, unknown names, empty values and non-strings return `400`
+    with `errors.timezone`.
+- Any other field (`email`, `password`, `id`, …) returns `400` with an error for that
+  field, and nothing is saved.
+- `200 OK` returns `{ "user": { … } }` in the same shape as `GET /api/auth/me`.
+- `401` for a missing or invalid token, or `User account no longer exists.`
 
 ### Reusing the middleware
 
@@ -1097,6 +1410,245 @@ goes into your development database.
 
 Don't share exported Postman environments: they contain your tokens.
 
+## Priority scoring
+
+`GET /api/applications/priorities` ranks the signed-in user's applications by an
+explainable priority score. The logic is a pure, independently tested module,
+`backend/src/services/priorityScoring.js`:
+- It doesn't use Express, the database or the system clock; the caller passes the
+  reference date.
+- The controller passes "now", and the service applies it to the user's applications.
+- **Scores are never stored.** They're recalculated on every request, because urgency
+  changes from day to day. The MongoDB schema is unchanged.
+
+### Formula
+
+```text
+P = 0.40·D + 0.25·F + 0.20·S + 0.15·I
+```
+
+Each factor is on a 0–100 scale, so P is too.
+- **Precision:** P is computed at full precision as the exact integer
+  `(40D + 25F + 20S + 15I)`, divided by 100 once. It's then **rounded to the nearest
+  whole number**, with .5 rounding up.
+- **Breakdown:** each factor's score, weight and contribution are returned alongside.
+
+**Days** are counted by **UTC calendar date**, not by elapsed 24-hour periods. A
+deadline stored as `2026-11-30` (midnight UTC) is "today" at any time on 30 November
+UTC, "in 1 day" at any time on the 29th, and "passed" from 1 December.
+
+### D: deadline urgency (weight 0.40)
+
+This applies **only when the status is Saved**, i.e. the application hasn't been
+submitted yet.
+
+| Days until the deadline | Score |
+| ----------------------- | ----- |
+| Today (0) | 100 |
+| 1–2 | 90 |
+| 3–7 | 70 |
+| 8–14 | 40 |
+| 15–30 | 20 |
+| More than 30 | 10 |
+| No deadline | 0 |
+| Deadline passed | 0 |
+
+**Special cases:**
+- **A passed deadline** scores 0, is flagged `expired: true`, and is explained ("Application
+  deadline has passed (3 days ago)."). It's **not** treated as an overdue follow-up.
+- **Applied, Interviewing, Offer and Rejected** applications get D = 0. Their
+  explanation says the deadline no longer affects priority; no urgency message is
+  generated.
+
+### F: follow-up urgency (weight 0.25)
+
+| Follow-up date | Score |
+| -------------- | ----- |
+| Overdue | 100 |
+| Due today | 100 |
+| In 1–2 days | 85 |
+| In 3–7 days | 60 |
+| In 8–14 days | 30 |
+| More than 14 days away | 10 |
+| No follow-up date | 0 |
+
+### S: stage (weight 0.20) and I: interest (weight 0.15)
+
+| Status | S |
+| ------ | - |
+| Saved | 40 |
+| Applied | 60 |
+| Interviewing | 90 |
+| Offer | 100 |
+| Rejected | 0 |
+
+**I = interestLevel × 20**, so levels 1–5 give 20, 40, 60, 80 or 100.
+
+### Special rules
+
+- **Rejected** applications always score **0** and are categorised **"No action"**,
+  whatever their dates or interest.
+  - Their single explanation is "Application is rejected and requires no further
+    action."
+  - The underlying weighted sum is still reported as `rawScore`, with an `override`
+    note, for transparency.
+  - They're **excluded from the ranking by default**, in the database query itself.
+    Add `?includeRejected=true` to include them; they then rank last.
+- **Missing dates** contribute 0. No date is ever invented.
+
+### Categories
+
+| Score | Category |
+| ----- | -------- |
+| 75–100 | Critical |
+| 50–74 | High |
+| 25–49 | Medium |
+| 1–24 | Low |
+| 0 | No action |
+
+### Ranking and tie-breaking
+
+1. **Priority score**, highest first.
+2. **Next action date**, earliest first. This is the earlier of:
+   - the follow-up date (an overdue one counts, so it sorts before upcoming ones);
+   - the deadline, only while it still applies (status Saved and not passed).
+
+   Applications that have a next action date rank before those that don't.
+3. **Application id** in ascending order (string comparison of the ObjectId), which
+   is stable and unique.
+
+Ranking is applied to the **complete set** of the user's eligible applications.
+Pagination happens afterwards, so page 2 really is ranks 11–20 of a global ordering.
+
+### `GET /api/applications/priorities`
+
+Requires `Authorization: Bearer <token>`. Results are always scoped to the token's
+user, and passing a `user` query parameter returns 400.
+
+| Query parameter | Default | Rules |
+| --------------- | ------- | ----- |
+| `page` | `1` | Positive integer |
+| `limit` | `20` | Positive integer, at most `100` |
+| `includeRejected` | `false` | `true` or `false` |
+
+Any other query parameter returns `400` with the usual field-level `errors`. Each
+application has the same fields as in `GET /api/applications`, plus `priority`:
+
+```json
+{
+  "applications": [
+    {
+      "id": "6750a1b2c3d4e5f607182930",
+      "user": "6650f1c2a1b2c3d4e5f60718",
+      "company": "Microsoft",
+      "position": "Software Engineering Intern",
+      "status": "Saved",
+      "deadline": "2026-11-25T00:00:00.000Z",
+      "followUpDate": "2026-11-30T00:00:00.000Z",
+      "interestLevel": 4,
+      "createdAt": "2026-11-20T18:00:00.000Z",
+      "updatedAt": "2026-11-20T18:00:00.000Z",
+      "priority": {
+        "score": 71,
+        "category": "High",
+        "rawScore": 71,
+        "factors": {
+          "deadline": { "score": 90, "weight": 0.4, "contribution": 36, "explanation": "Application deadline is in 2 days.", "daysUntil": 2, "expired": false, "applies": true },
+          "followUp": { "score": 60, "weight": 0.25, "contribution": 15, "explanation": "Follow-up is due in 7 days.", "daysUntil": 7, "overdue": false },
+          "stage": { "score": 40, "weight": 0.2, "contribution": 8, "explanation": "Application is saved but has not been submitted yet." },
+          "interest": { "score": 80, "weight": 0.15, "contribution": 12, "explanation": "Interest level is 4 out of 5.", "level": 4 }
+        },
+        "explanations": [
+          "Application deadline is in 2 days.",
+          "Follow-up is due in 7 days.",
+          "Application is saved but has not been submitted yet.",
+          "Interest level is 4 out of 5."
+        ],
+        "nextActionDate": "2026-11-25"
+      }
+    }
+  ],
+  "pagination": { "page": 1, "limit": 20, "total": 1, "totalPages": 1, "hasNextPage": false, "hasPrevPage": false },
+  "scoring": { "formula": "P = 0.40D + 0.25F + 0.20S + 0.15I", "referenceDate": "2026-11-23", "timezone": "UTC", "includeRejected": false }
+}
+```
+
+`referenceDate` is today's calendar date in the user's time zone (`timezone`). See
+[Time zones and automatic refresh](#time-zones-and-automatic-refresh).
+
+An account with no eligible applications returns `"applications": []` with
+`total: 0`.
+
+### Worked example (reference date 2026-11-23)
+
+Saved application, deadline 2026-11-25, follow-up 2026-11-30, interest level 4:
+
+| Factor | Rule | Score | × Weight | Contribution |
+| ------ | ---- | ----- | -------- | ------------ |
+| D | Deadline in 2 days (1–2) | 90 | 0.40 | 36 |
+| F | Follow-up in 7 days (3–7) | 60 | 0.25 | 15 |
+| S | Saved | 40 | 0.20 | 8 |
+| I | 4 × 20 | 80 | 0.15 | 12 |
+| **P** | | | | **71 → High** |
+
+The same application after it moves to **Applied** gets D = 0 and S = 60, so
+P = 0 + 15 + 12 + 12 = **39 (Medium)**. If it's **Rejected**, P is **0 (No action)**.
+
+### Demo data (development database)
+
+`backend/scripts/demoData.js` adds 20 realistic sample applications to an **existing**
+development account, so the ranking has something to show. Run it from `backend/`:
+
+```bash
+node scripts/demoData.js inspect
+```
+
+```bash
+node scripts/demoData.js seed --email you@example.com
+```
+
+```bash
+node scripts/demoData.js verify --email you@example.com
+```
+
+```bash
+node scripts/demoData.js remove --email you@example.com
+```
+
+- **`inspect`** is read-only. It prints the database name and each user's application
+  count.
+- **`seed`** creates the demo applications:
+  - companies include Google, Microsoft, Amazon, Meta, Apple, Netflix, Stripe and NVIDIA;
+  - statuses are 5 Saved, 5 Applied, 4 Interviewing, 2 Offer and 4 Rejected;
+  - dates are relative to today, so urgency is always varied: deadlines today or
+    soon, overdue follow-ups, and some records with no dates.
+- **`verify`** calls `GET /api/applications` and `/api/applications/priorities` through
+  the real routes, in-process, and prints the totals, status distribution and
+  ranking.
+- **`remove`** deletes only the demo records.
+
+**Safety:**
+- It uses `backend/.env` and **refuses any database whose name ends in `_test`**.
+- It never creates users and never touches non-demo applications.
+- Records go through the same validation (`validateCreateApplication`) and service
+  (`applicationService.createApplication`) as `POST /api/applications`, owned by the
+  given user.
+- Every demo record's notes start with `[DEMO DATA demo-NN]`. Seeding skips any key that
+  already exists, so **rerunning never creates duplicates**.
+
+### Known limitations
+
+- **Every request reads all of the user's eligible applications.** Scores depend on
+  the date, so they can't be stored and sorted in MongoDB; ranking happens in
+  application memory. That's fine for personal-scale data (hundreds or thousands of
+  applications). At much larger scale it would need an aggregation pipeline that
+  computes the factors in MongoDB, or caching per reference day.
+- **Day-based scores change at midnight in the user's time zone** (UTC until the user
+  chooses one), so two requests either side of that midnight can rank differently.
+  `scoring.referenceDate` and `scoring.timezone` show which day and zone were used.
+- **The thresholds and weights are fixed** in code, as specified. They aren't
+  learned or configurable per user.
+
 ## Interpreting API responses (frontend guide)
 
 The API contract as of Milestone 3B (field-level `errors`, `expiresAt`, clearer
@@ -1212,6 +1764,42 @@ only the Express app, without loading `.env` or connecting to MongoDB Atlas.
   - `expiresAt` matching the JWT `exp` claim;
   - the generic malformed-JSON message;
   - query-free 404 messages.
+- `test/priorityScoring.test.js` (69 tests) unit-tests the pure scoring engine:
+  - every deadline and follow-up range, at both edges;
+  - missing, expired and overdue dates;
+  - all five statuses and all five interest levels;
+  - Rejected scoring 0;
+  - the worked example and rounding at .5;
+  - an exhaustive check that every score is an integer from 0 to 100;
+  - category boundaries;
+  - UTC calendar-day edges (23:59:59 vs 00:00, month, year and leap-day);
+  - deterministic ranking with each tie-break.
+- `test/priorities.test.js` (12 tests) makes real HTTP calls to
+  `GET /api/applications/priorities` with a pinned clock and an in-memory store that
+  throws on any query not scoped to a user. It covers:
+  - authentication;
+  - `/priorities` not being treated as an `:id`;
+  - empty results and the exact response shape;
+  - ranking order;
+  - global ranking before pagination;
+  - rejected applications excluded and `includeRejected`;
+  - owner isolation, with a `user` query parameter rejected;
+  - query validation;
+  - scores never being written to the database.
+- `test/timezone.test.js` (27 tests) covers Milestone 5C:
+  - IANA validation: case fixing, aliases, and rejecting offsets, unknown names,
+    injection-like strings and non-strings;
+  - the User model validator and the UTC default for accounts without a preference;
+  - the local calendar date for UTC, Chicago, New York, Los Angeles, Tokyo, Kolkata
+    and Kiritimati;
+  - zones ahead of UTC;
+  - daylight-saving transitions (Chicago spring and fall, Sydney);
+  - deadline and follow-up scores changing exactly at local midnight;
+  - date-only values keeping their calendar date;
+  - identical results for UTC users;
+  - `PATCH /api/auth/me`: own account only, validators on, other fields rejected,
+    401s;
+  - the priorities metadata per time zone.
 - `test/logging.test.js` covers Morgan request logging and server-error logging:
   - one colored line per request, with status, response time and size;
   - no query strings, passwords, JWTs, `Authorization` headers or cookies in the logs;
@@ -1248,6 +1836,62 @@ needed: `fetch` is replaced with a mock that answers like the real API.
   - success, which stores the token and expiry and opens the dashboard;
   - invalid credentials;
   - required fields, loading state and network errors.
+- `timezone.test.jsx` (29 tests), with deterministic fake clocks:
+  - browser time zone detection and validation;
+  - next local midnight, including 23- and 25-hour days and a skipped midnight;
+  - the refresh hook:
+    - midnight scheduling and rescheduling;
+    - time zone changes;
+    - tab visibility only when the date changed;
+    - reconnect;
+    - no refresh while one is running;
+    - timer and listener cleanup;
+  - in the app:
+    - a real midnight refresh on the Priorities page, with no polling afterwards;
+    - tab-return and reconnect refreshes;
+    - refreshes after create, update and delete, with simultaneous triggers
+      merged;
+    - stale responses ignored;
+    - consistent multi-page reads across midnight;
+  - Settings: loading, changing and saving, and server errors;
+  - the one-time suggestion: no save without a click, "Use …" and "Keep UTC", and
+    hidden when not needed;
+  - date-only values showing as entered with the browser in Los Angeles, Chicago and
+    Tokyo, in the list, details, edit value and priorities.
+- `priorities.test.jsx` (28 tests), against an in-memory priorities backend in the
+  real response shape:
+  - rendering: backend order and global ranks, every field, the most relevant
+    explanation;
+  - the score shown as text plus a bar of matching width;
+  - category names and colours;
+  - warnings, including an overdue follow-up on a Medium item;
+  - summary cards over every backend page, not just the visible page;
+  - sequential 100-per-request fetching, the 10-page cap, and a malformed response;
+  - the breakdown: factor scores, weights, contributions, total, explanations,
+    formula, the rejected override, and opening the existing details sheet;
+  - category and status filters across all pages, Include rejected, URL filters and
+    Reset;
+  - pagination totals and ranks on every page, and a page past the end;
+  - loading, empty, filtered-empty, 500 with retry, and 401 back to login;
+  - the route requiring authentication;
+  - responsive classes and the mobile navigation link;
+  - dashboard Top priorities: one `limit=3` request, the fields, the link, and error
+    with retry;
+  - the insight helpers.
+- `bulkCreate.test.jsx` (16 tests) covers bulk entry:
+  - opening it from the Applications page;
+  - three numbered rows with defaults;
+  - adding rows up to 20, and removing and renumbering them;
+  - the responsive grid;
+  - per-row validation: nothing sent while invalid, focus on the first error, URL
+    checks, removing empty rows;
+  - the exact POST payload;
+  - sequential creation with progress (at most one request in flight);
+  - partial failures with backend field errors;
+  - retry sending only failed rows, never created ones;
+  - duplicate-submit prevention;
+  - 401 stopping the batch;
+  - the route requiring authentication.
 - `applicationManagement.test.jsx` (31 tests), against an in-memory backend that
   follows the real contract, with `:id` routes:
   - details, including "Not set" fields and 404 handling;
@@ -1294,7 +1938,8 @@ needed: `fetch` is replaced with a mock that answers like the real API.
     account, expired session, server unreachable);
   - logout;
   - automatic logout at `expiresAt`;
-  - a dashboard shell with no fake data.
+  - a dashboard shell with no fake data;
+  - Priorities in the sidebar as a link.
 
 ### Integration tests (optional, real database)
 
@@ -1309,6 +1954,21 @@ These run against a real MongoDB server:
   - that update validators run in the database path;
   - the owner-scoped index;
   - ownership isolation between two users.
+- `test/integration/priorities.integration.test.js` scores real stored applications,
+  with dates relative to today in UTC. It checks:
+  - authentication;
+  - ranking order and categories;
+  - expired-deadline and overdue explanations;
+  - rejected applications excluded by default and included on request;
+  - pagination of the global ranking;
+  - isolation between two users;
+  - that no priority field is ever stored;
+  - the time zone preference (Milestone 5C):
+    - a registered account has no stored `timezone` and reports the UTC default;
+    - `PATCH /api/auth/me` stores only that user's zone, and an invalid zone is
+      rejected;
+    - the priorities `referenceDate` matches today in Chicago;
+    - the stored application record is byte-for-byte unchanged.
 
 Safeguards:
 - **They're skipped unless `TEST_MONGODB_URI` is set.** They never read `MONGODB_URI`

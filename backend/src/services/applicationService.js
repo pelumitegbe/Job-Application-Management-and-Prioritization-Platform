@@ -1,6 +1,8 @@
 const JobApplication = require('../models/JobApplication');
 const User = require('../models/User');
 const { createHttpError } = require('../utils/httpError');
+const { rankApplications } = require('./priorityScoring');
+const { referenceDateFor } = require('../utils/timezone');
 
 // Every query below includes `user: userId`, so ownership is enforced by the
 // database query itself. A missing record and another user's record are
@@ -73,8 +75,53 @@ async function deleteApplication(userId, applicationId) {
   if (deletedCount === 0) throw notFoundError();
 }
 
+/**
+ * Ranked applications for GET /api/applications/priorities.
+ *
+ * Scores are computed on every request (urgency changes daily) and never stored.
+ * The whole set of the user's eligible applications is scored and sorted first,
+ * then the requested page is sliced, so ranking is global rather than per page.
+ * Rejected applications are excluded in the database query unless requested.
+ */
+/**
+ * Ranks the user's applications as of `now` in `timezone` (an IANA name).
+ * "Today" is the user's local calendar date; scoring itself is unchanged.
+ */
+async function getPrioritizedApplications(userId, { page, limit, includeRejected }, { now, timezone }) {
+  const referenceDate = referenceDateFor(now, timezone);
+  const filter = { user: userId };
+  if (!includeRejected) filter.status = { $ne: 'Rejected' };
+
+  const documents = await JobApplication.find(filter);
+  const ranked = rankApplications(
+    documents.map((document) => document.toJSON()),
+    referenceDate
+  );
+
+  const total = ranked.length;
+  const totalPages = Math.ceil(total / limit);
+  return {
+    applications: ranked.slice((page - 1) * limit, page * limit),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+    scoring: {
+      formula: 'P = 0.40D + 0.25F + 0.20S + 0.15I',
+      referenceDate: referenceDate.toISOString().slice(0, 10), // the user's local calendar date
+      timezone,
+      includeRejected,
+    },
+  };
+}
+
 module.exports = {
   createApplication,
+  getPrioritizedApplications,
   listApplications,
   getApplication,
   updateApplication,

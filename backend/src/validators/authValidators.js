@@ -4,6 +4,7 @@
 // Passwords are never included in error messages.
 
 const { createIssues } = require('./validationIssues');
+const { normalizeTimeZone } = require('../utils/timezone');
 
 const NAME_MAX_LENGTH = 100;
 const EMAIL_MAX_LENGTH = 254;
@@ -71,10 +72,34 @@ function validateLogin(body) {
   };
 }
 
+/**
+ * PATCH /api/auth/me: only `timezone` may be changed. Unknown fields are
+ * rejected so a client can't try to update email, password or other fields.
+ */
+function validateProfileUpdate(body) {
+  const issues = createIssues();
+  const isObject = body && typeof body === 'object' && !Array.isArray(body);
+  if (!isObject || Object.keys(body).length === 0) {
+    issues.add('timezone', 'timezone is required.');
+  } else {
+    for (const key of Object.keys(body)) {
+      if (key !== 'timezone') issues.add(key, `${key} cannot be updated here.`);
+    }
+    if (!('timezone' in body) || body.timezone === '' || body.timezone === null) {
+      issues.add('timezone', 'timezone is required.');
+    } else if (normalizeTimeZone(body.timezone) === null) {
+      issues.add('timezone', 'timezone must be a valid IANA time zone identifier, such as America/Chicago.');
+    }
+  }
+  const { errors, fieldErrors } = issues;
+  return { errors, fieldErrors, value: errors.length ? null : { timezone: normalizeTimeZone(body.timezone) } };
+}
+
 module.exports = {
   validateRegistration,
   validateLogin,
   normalizeEmail,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_BYTES,
+  validateProfileUpdate,
 };

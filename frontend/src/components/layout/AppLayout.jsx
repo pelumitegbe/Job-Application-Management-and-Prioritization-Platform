@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import Logo from '../common/Logo';
 import SidebarNav from './SidebarNav';
+import TimezoneSuggestion from '../settings/TimezoneSuggestion';
 
 function initials(name = '') {
   return name
@@ -25,7 +26,7 @@ function RoadmapNote() {
         Next up
       </p>
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-        Priority ranking is being built next, followed by follow-up reminders.
+        Follow-up reminders are coming next.
       </p>
     </div>
   );
@@ -49,7 +50,7 @@ function SidebarContents({ onNavigate }) {
  * - lg and up: fixed sidebar + content column.
  * - below lg: the sidebar moves into a slide-over sheet opened from the header.
  */
-export default function AppLayout({ title, children }) {
+export default function AppLayout({ title, children, hideTimezoneSuggestion = false }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -121,7 +122,10 @@ export default function AppLayout({ title, children }) {
         </header>
 
         <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
-          <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">{children}</div>
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+            {!hideTimezoneSuggestion && <TimezoneSuggestion />}
+            {children}
+          </div>
         </main>
       </div>
     </div>

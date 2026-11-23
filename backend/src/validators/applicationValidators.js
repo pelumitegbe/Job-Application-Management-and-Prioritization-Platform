@@ -177,9 +177,13 @@ function validateObjectId(id, name = 'id') {
     };
 }
 
-function validatePagination(query) {
+/**
+ * Validates ?page and ?limit. `extraParams` lists additional query parameters
+ * the caller handles itself (they are not reported as unknown).
+ */
+function validatePagination(query, { extraParams = [] } = {}) {
   const issues = createIssues();
-  const allowed = ['page', 'limit'];
+  const allowed = ['page', 'limit', ...extraParams];
   for (const key of Object.keys(query || {})) {
     if (!allowed.includes(key)) issues.add(key, `Unknown query parameter: ${key}.`);
   }
@@ -205,8 +209,32 @@ function validatePagination(query) {
   return { errors, fieldErrors, value: errors.length ? null : { page, limit } };
 }
 
+const BOOLEAN_VALUES = { true: true, false: false };
+
+/** GET /api/applications/priorities: ?page, ?limit and ?includeRejected=true|false. */
+function validatePriorityQuery(query) {
+  const pagination = validatePagination(query, { extraParams: ['includeRejected'] });
+  const errors = [...pagination.errors];
+  const fieldErrors = { ...pagination.fieldErrors };
+
+  let includeRejected = false;
+  const raw = query?.includeRejected;
+  if (raw !== undefined) {
+    if (typeof raw === 'string' && Object.hasOwn(BOOLEAN_VALUES, raw)) {
+      includeRejected = BOOLEAN_VALUES[raw];
+    } else {
+      const message = 'includeRejected must be true or false.';
+      errors.push(message);
+      fieldErrors.includeRejected = message;
+    }
+  }
+
+  return { errors, fieldErrors, value: errors.length ? null : { ...pagination.value, includeRejected } };
+}
+
 module.exports = {
   validateCreateApplication,
+  validatePriorityQuery,
   validateUpdateApplication,
   validateObjectId,
   validatePagination,
